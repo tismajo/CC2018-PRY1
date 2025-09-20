@@ -2,7 +2,7 @@ use raylib::math::Vector2;
 
 pub struct Player {
     pub pos: Vector2,
-    pub a: f32,
+    pub a: f32, // ángulo de visión en radianes
     pub fov: f32,
 }
 
@@ -10,8 +10,8 @@ impl Player {
     pub fn new(x: f32, y: f32) -> Self {
         Player {
             pos: Vector2::new(x, y),
-            a: std::f32::consts::PI / 3.0,
-            fov: std::f32::consts::PI / 3.0, // 60 grados
+            a: std::f32::consts::PI / 3.0, // PI/3 como valor inicial
+            fov: std::f32::consts::PI / 3.0,
         }
     }
 
@@ -39,17 +39,17 @@ impl Player {
     }
 
     pub fn try_move(&mut self, new_x: f32, new_y: f32, maze: &super::maze::Maze) -> bool {
-        let block_size = 20.0;
+        let block_size = 20.0; // Debe coincidir con el block_size usado en el render
         let i = (new_x / block_size) as usize;
         let j = (new_y / block_size) as usize;
 
-        if j < maze.len() && i < maze[0].len() {
-            if maze[j][i] != '#' && maze[j][i] != 'L' {
-                self.pos.x = new_x;
-                self.pos.y = new_y;
-                return true;
-            }
+        // Verificar si la nueva posición es válida (no es una pared)
+        if j < maze.len() && i < maze[0].len() && maze[j][i] != '#' {
+            self.pos.x = new_x;
+            self.pos.y = new_y;
+            true
+        } else {
+            false
         }
-        false
     }
 }
