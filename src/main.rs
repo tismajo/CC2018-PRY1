@@ -27,15 +27,15 @@ fn main() {
     
     let mut player = Player::new(start_x, start_y);
 
-    // Calcular dimensiones basadas en el laberinto
+    // Dimensiones base para 2D
     let block_size = 20;
-    let width = maze[0].len() * block_size;
-    let height = maze.len() * block_size;
+    let maze_width = 1380;
+    let maze_height = 940;
     
+    // Inicializar ventana con un tamaño decente (ajustable)
     let (mut rl, thread) = raylib::init()
-        .size(width as i32, height as i32)
+        .size(maze_width, maze_height)
         .title("OFF (The 3D version)")
-        .resizable()
         .build();
 
     rl.set_target_fps(60);
@@ -51,8 +51,20 @@ fn main() {
         // Procesar eventos de input
         process_events(&rl, &mut player, &maze, 20);
 
-        // Crear nuevo framebuffer en cada frame
-        let mut fb = Framebuffer::new_buffer(width as i32, height as i32, Color::WHITE);
+        // Dimensiones de framebuffer según el modo
+        let mut fb = if mode == "2D" {
+            Framebuffer::new_buffer(
+                maze_width as i32,
+                maze_height as i32,
+                Color::BLACK,
+            )
+        } else {
+            Framebuffer::new_buffer(
+                rl.get_screen_width(),
+                rl.get_screen_height(),
+                Color::BLACK,
+            )
+        };
         
         // Renderizar según el modo actual
         if mode == "2D" {
@@ -73,6 +85,5 @@ fn main() {
         d.draw_text(&format!("Angle: {:.2} rad", player.a), 10, 30, 20, Color::WHITE);
         d.draw_text(&format!("FOV: {:.2} rad", player.fov), 10, 50, 20, Color::WHITE);
         d.draw_text(&format!("Mode: {} (Press M to toggle)", mode), 10, 70, 20, Color::WHITE);
-        d.draw_text("Controls: Arrow keys to move, A/D to strafe", 10, height as i32 - 30, 20, Color::WHITE);
     }
 }
