@@ -6,12 +6,14 @@ mod player;
 mod input;
 mod renderer;
 mod intersect;
+mod textures;
 
 use crate::framebuffer::Framebuffer;
 use crate::player::Player;
 use crate::maze::{find_player_start, load_maze, print_maze};
 use crate::input::process_events;
 use crate::renderer::{render_world_2d, render_world_3d};
+use crate::textures::TextureManager;
 
 use raylib::prelude::*;
 
@@ -40,12 +42,18 @@ fn main() {
 
     rl.set_target_fps(60);
 
+    // IMPORTANTE: Cargar el TextureManager UNA SOLA VEZ fuera del loop
+    let texture_manager = TextureManager::new(&mut rl, &thread);
+    println!("TextureManager inicializado con {} texturas", 
+             if texture_manager.is_initialized() { "éxito" } else { "fallback" });
+
     let mut mode = "2D"; // Modo inicial
 
     while !rl.window_should_close() {
         // Cambiar modo con la tecla M
         if rl.is_key_pressed(KeyboardKey::KEY_M) {
             mode = if mode == "2D" { "3D" } else { "2D" };
+            println!("Cambiando a modo: {}", mode);
         }
 
         // Procesar eventos de input
@@ -65,12 +73,12 @@ fn main() {
                 Color::BLACK,
             )
         };
-        
-        // Renderizar según el modo actual
+
+        // Renderizar según el modo actual (reutilizando el mismo texture_manager)
         if mode == "2D" {
             render_world_2d(&mut fb, &maze, &player, block_size);
         } else {
-            render_world_3d(&mut fb, &maze, &player, block_size);
+            render_world_3d(&mut fb, &maze, &player, block_size, &texture_manager);
         }
 
         // Convertir framebuffer a textura

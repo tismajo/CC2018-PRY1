@@ -44,12 +44,14 @@ impl Player {
         let j = (new_y / block_size) as usize;
 
         // Verificar si la nueva posición es válida (no es una pared)
-        if j < maze.len() && i < maze[0].len() && maze[j][i] != '#' {
-            self.pos.x = new_x;
-            self.pos.y = new_y;
-            true
-        } else {
-            false
+        if j < maze.len() && i < maze[0].len() {
+            let cell = maze[j][i];
+            if cell != '#' && cell != 'E' && cell != 'L' {
+                self.pos.x = new_x;
+                self.pos.y = new_y;
+                return true;
+            }
         }
+        false
     }
 }

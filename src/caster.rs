@@ -28,7 +28,7 @@ pub fn cast_ray(
         }
 
         // Si encontramos una pared, retornar la intersección
-        if maze[j][i] == '#' || maze[j][i] == 'L' {
+        if maze[j][i] == '#' || maze[j][i] == 'L' || maze[j][i] == 'E' {
             return Intersect::new(d, maze[j][i]);
         }
 
