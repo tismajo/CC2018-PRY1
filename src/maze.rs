@@ -8,7 +8,6 @@ pub type Maze = Vec<Vec<char>>;
 pub fn load_maze(filename: &str) -> Maze {
     let file = File::open(filename).unwrap();
     let reader = BufReader::new(file);
-
     reader
         .lines()
         .map(|line| line.unwrap().chars().collect())
@@ -24,13 +23,13 @@ pub fn print_maze(maze: &Maze) {
     }
 }
 
-pub fn find_player_start(maze: &Maze) -> Option<(f32, f32)> {
+pub fn find_player_start(maze: &Maze, block_size: usize) -> Option<(f32, f32)> {
     for (j, row) in maze.iter().enumerate() {
         for (i, &cell) in row.iter().enumerate() {
             if cell == 'P' || cell == 'p' {
-                // Devolver coordenadas en el centro de la celda
-                let x = (i as f32 * 20.0) + 10.0;
-                let y = (j as f32 * 20.0) + 10.0;
+                // Devolver coordenadas en el centro de la celda usando el block_size proporcionado
+                let x = (i as f32 * block_size as f32) + (block_size as f32 / 2.0);
+                let y = (j as f32 * block_size as f32) + (block_size as f32 / 2.0);
                 return Some((x, y));
             }
         }

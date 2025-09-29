@@ -14,21 +14,21 @@ impl Player {
             fov: std::f32::consts::PI / 3.0,
         }
     }
-
-    pub fn move_forward(&mut self, distance: f32, maze: &super::maze::Maze) -> bool {
+    
+    pub fn move_forward(&mut self, distance: f32, maze: &super::maze::Maze, block_size: usize) -> bool {
         let new_x = self.pos.x + distance * self.a.cos();
         let new_y = self.pos.y + distance * self.a.sin();
         
-        self.try_move(new_x, new_y, maze)
+        self.try_move(new_x, new_y, maze, block_size)
     }
-
-    pub fn move_backward(&mut self, distance: f32, maze: &super::maze::Maze) -> bool {
+    
+    pub fn move_backward(&mut self, distance: f32, maze: &super::maze::Maze, block_size: usize) -> bool {
         let new_x = self.pos.x - distance * self.a.cos();
         let new_y = self.pos.y - distance * self.a.sin();
         
-        self.try_move(new_x, new_y, maze)
+        self.try_move(new_x, new_y, maze, block_size)
     }
-
+    
     pub fn rotate(&mut self, angle: f32) {
         self.a += angle;
         // Normalizar el ángulo entre 0 y 2π
@@ -37,12 +37,12 @@ impl Player {
             self.a += 2.0 * std::f32::consts::PI;
         }
     }
-
-    pub fn try_move(&mut self, new_x: f32, new_y: f32, maze: &super::maze::Maze) -> bool {
-        let block_size = 20.0; // Debe coincidir con el block_size usado en el render
-        let i = (new_x / block_size) as usize;
-        let j = (new_y / block_size) as usize;
-
+    
+    pub fn try_move(&mut self, new_x: f32, new_y: f32, maze: &super::maze::Maze, block_size: usize) -> bool {
+        let block_size_f = block_size as f32;
+        let i = (new_x / block_size_f) as usize;
+        let j = (new_y / block_size_f) as usize;
+        
         // Verificar si la nueva posición es válida (no es una pared)
         if j < maze.len() && i < maze[0].len() {
             let cell = maze[j][i];
