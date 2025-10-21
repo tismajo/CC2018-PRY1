@@ -1,57 +1,50 @@
-use raylib::math::Vector2;
+//player.rs
+use raylib::prelude::*;
+use std::f32::consts::{PI, TAU};
 
 pub struct Player {
     pub pos: Vector2,
-    pub a: f32, // ángulo de visión en radianes
-    pub fov: f32,
+    pub a: f32,   // ángulo en radianes
+    pub fov: f32, // campo de visión
 }
 
 impl Player {
-    pub fn new(x: f32, y: f32) -> Self {
+    pub fn new(x: f32, y: f32, fov: f32) -> Self {
         Player {
             pos: Vector2::new(x, y),
-            a: std::f32::consts::PI / 3.0, // PI/3 como valor inicial
-            fov: std::f32::consts::PI / 3.0,
+            a: 0.0,
+            fov,
         }
     }
-    
-    pub fn move_forward(&mut self, distance: f32, maze: &super::maze::Maze, block_size: usize) -> bool {
-        let new_x = self.pos.x + distance * self.a.cos();
-        let new_y = self.pos.y + distance * self.a.sin();
-        
-        self.try_move(new_x, new_y, maze, block_size)
-    }
-    
-    pub fn move_backward(&mut self, distance: f32, maze: &super::maze::Maze, block_size: usize) -> bool {
-        let new_x = self.pos.x - distance * self.a.cos();
-        let new_y = self.pos.y - distance * self.a.sin();
-        
-        self.try_move(new_x, new_y, maze, block_size)
-    }
-    
-    pub fn rotate(&mut self, angle: f32) {
-        self.a += angle;
-        // Normalizar el ángulo entre 0 y 2π
-        self.a = self.a % (2.0 * std::f32::consts::PI);
+
+    pub fn normalize_angle(&mut self) {
         if self.a < 0.0 {
-            self.a += 2.0 * std::f32::consts::PI;
+            self.a += TAU;
+        } else if self.a >= TAU {
+            self.a -= TAU;
         }
     }
-    
-    pub fn try_move(&mut self, new_x: f32, new_y: f32, maze: &super::maze::Maze, block_size: usize) -> bool {
-        let block_size_f = block_size as f32;
-        let i = (new_x / block_size_f) as usize;
-        let j = (new_y / block_size_f) as usize;
-        
-        // Verificar si la nueva posición es válida (no es una pared)
-        if j < maze.len() && i < maze[0].len() {
-            let cell = maze[j][i];
-            if cell != '#' && cell != 'E' && cell != 'L' {
-                self.pos.x = new_x;
-                self.pos.y = new_y;
-                return true;
-            }
-        }
-        false
+}
+
+pub fn process_events(window: &RaylibHandle, player: &mut Player, delta_time: f32) {
+    const MOVE_SPEED: f32 = 150.0; // píxeles por segundo
+    const ROTATION_SPEED: f32 = PI / 2.0; // rad/s
+
+    if window.is_key_down(KeyboardKey::KEY_LEFT) {
+        player.a -= ROTATION_SPEED * delta_time;
     }
+    if window.is_key_down(KeyboardKey::KEY_RIGHT) {
+        player.a += ROTATION_SPEED * delta_time;
+    }
+
+    if window.is_key_down(KeyboardKey::KEY_UP) {
+        player.pos.x += MOVE_SPEED * delta_time * player.a.cos();
+        player.pos.y += MOVE_SPEED * delta_time * player.a.sin();
+    }
+    if window.is_key_down(KeyboardKey::KEY_DOWN) {
+        player.pos.x -= MOVE_SPEED * delta_time * player.a.cos();
+        player.pos.y -= MOVE_SPEED * delta_time * player.a.sin();
+    }
+
+    player.normalize_angle();
 }
