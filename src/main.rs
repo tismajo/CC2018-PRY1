@@ -6,12 +6,14 @@ mod player;
 mod input;
 mod renderer;
 mod intersect;
+mod texture;
 
 use crate::framebuffer::Framebuffer;
 use crate::player::Player;
 use crate::maze::{find_player_start, load_maze, print_maze};
 use crate::input::process_events;
 use crate::renderer::{render_world_2d, render_world_3d};
+use crate::texture::TextureManager;
 
 use raylib::prelude::*;
 
@@ -40,6 +42,8 @@ fn main() {
 
     rl.set_target_fps(60);
 
+    let texture_manager: TextureManager = TextureManager::new(&mut rl);
+    
     let mut mode = "2D"; // Modo inicial
 
     while !rl.window_should_close() {
@@ -70,7 +74,7 @@ fn main() {
         if mode == "2D" {
             render_world_2d(&mut fb, &maze, &player, block_size);
         } else {
-            render_world_3d(&mut fb, &maze, &player, block_size);
+            render_world_3d(&mut fb, &maze, &player, block_size, &texture_manager);        
         }
 
         // Convertir framebuffer a textura

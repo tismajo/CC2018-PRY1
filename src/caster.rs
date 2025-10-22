@@ -18,25 +18,32 @@ pub fn cast_ray(
         let x = player.pos.x + cos;
         let y = player.pos.y + sin;
 
-        // Convertir coordenadas a posición en el laberinto
         let i = (x / block_size as f32) as usize;
         let j = (y / block_size as f32) as usize;
 
-        // Verificar si estamos dentro de los límites del laberinto
         if j >= maze.len() || i >= maze[0].len() {
-            return Intersect::new(d, ' '); // Fuera de límites
+            return Intersect::new(d, ' ', 0.0);
         }
 
-        // Si encontramos una pared, retornar la intersección
         if maze[j][i] == '#' || maze[j][i] == 'L' {
-            return Intersect::new(d, maze[j][i]);
+            // Calcular offset dentro del bloque
+            let offset_x = x % block_size as f32;
+            let offset_y = y % block_size as f32;
+
+            // Determinar si el impacto fue vertical u horizontal
+            let offset = if offset_x < offset_y {
+                offset_x / block_size as f32
+            } else {
+                offset_y / block_size as f32
+            };
+
+            return Intersect::new(d, maze[j][i], offset);
         }
 
         d += 1.0;
 
-        // Limitar la distancia máxima para evitar loops infinitos
         if d > 1000.0 {
-            return Intersect::new(d, ' ');
+            return Intersect::new(d, ' ', 0.0);
         }
     }
 }
@@ -58,28 +65,33 @@ pub fn cast_ray_debug(
         let x = player.pos.x + cos;
         let y = player.pos.y + sin;
 
-        // Convertir coordenadas a posición en el laberinto
         let i = (x / block_size as f32) as usize;
         let j = (y / block_size as f32) as usize;
 
-        // Verificar si estamos dentro de los límites del laberinto
         if j >= maze.len() || i >= maze[0].len() {
-            return Intersect::new(d, ' ');
+            return Intersect::new(d, ' ', 0.0);
         }
 
-        // Si encontramos una pared, retornar la intersección
         if maze[j][i] == '#' || maze[j][i] == 'L' {
             framebuffer.set_pixel(x as i32, y as i32);
-            return Intersect::new(d, maze[j][i]);
+
+            // Calcular offset también para debug
+            let offset_x = x % block_size as f32;
+            let offset_y = y % block_size as f32;
+            let offset = if offset_x < offset_y {
+                offset_x / block_size as f32
+            } else {
+                offset_y / block_size as f32
+            };
+
+            return Intersect::new(d, maze[j][i], offset);
         }
 
-        // Dibujar el rayo mientras no choque con pared
         framebuffer.set_pixel(x as i32, y as i32);
         d += 1.0;
 
-        // Limitar la distancia máxima
         if d > 1000.0 {
-            return Intersect::new(d, ' ');
+            return Intersect::new(d, ' ', 0.0);
         }
     }
 }
