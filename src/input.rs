@@ -3,9 +3,9 @@ use crate::player::Player;
 use crate::maze::Maze;
 
 pub fn process_events(window: &RaylibHandle, player: &mut Player, maze: &Maze, block_size: usize) {
-    const MOVE_SPEED: f32 = 3.0;
+    const MOVE_SPEED: f32 = 5.0;  // Aumentado para mejor experiencia
     const ROTATION_SPEED: f32 = 0.05;
-
+    
     // Rotación
     if window.is_key_down(KeyboardKey::KEY_LEFT) {
         player.rotate(-ROTATION_SPEED);
@@ -13,7 +13,7 @@ pub fn process_events(window: &RaylibHandle, player: &mut Player, maze: &Maze, b
     if window.is_key_down(KeyboardKey::KEY_RIGHT) {
         player.rotate(ROTATION_SPEED);
     }
-
+    
     // Movimiento hacia adelante/atrás
     if window.is_key_down(KeyboardKey::KEY_UP) {
         player.move_forward(MOVE_SPEED, maze);
@@ -21,7 +21,7 @@ pub fn process_events(window: &RaylibHandle, player: &mut Player, maze: &Maze, b
     if window.is_key_down(KeyboardKey::KEY_DOWN) {
         player.move_backward(MOVE_SPEED, maze);
     }
-
+    
     // Movimiento lateral (strafe)
     if window.is_key_down(KeyboardKey::KEY_A) {
         let strafe_angle = player.a - std::f32::consts::FRAC_PI_2;
