@@ -8,6 +8,7 @@ mod renderer;
 mod intersect;
 mod texture;
 mod enemy;
+mod audio; // <--- NUEVO: sistema de sonido
 
 use crate::framebuffer::Framebuffer;
 use crate::player::Player;
@@ -17,6 +18,8 @@ use crate::renderer::{render_world_2d, render_world_3d, draw_sprite_billboard};
 use crate::texture::TextureManager;
 use crate::enemy::{Enemy, distance};
 use crate::caster::is_blocked_by_wall;
+use crate::audio::Audio; // <--- NUEVO
+
 use raylib::prelude::*;
 
 enum GameState {
@@ -97,12 +100,15 @@ fn main() {
         .build();
     
     rl.set_target_fps(60);
-    
+
+    // === AUDIO ===
+    let mut audio = Audio::new(); // música de fondo
+    let mut last_health = player.health;
+
     let texture_manager = TextureManager::new(&mut rl);
     let mut prev_mouse_x = rl.get_mouse_position().x;
     let mut state = GameState::Menu;
     let mut damage_overlay_alpha: f32 = 0.0; // Opacidad del borde rojo
-    let mut last_health = player.health;
 
     while !rl.window_should_close() {
         match state {
@@ -149,18 +155,15 @@ fn main() {
             }
 
             GameState::Playing => {
-                // Movimiento del mouse
                 let mouse_pos = rl.get_mouse_position();
                 let mouse_dx = mouse_pos.x - prev_mouse_x;
                 prev_mouse_x = mouse_pos.x;
 
-                // Procesar eventos solo si vivo
                 let mut level_changed = false;
                 if player.health > 0 {
                     level_changed = process_events(&rl, &mut player, &maze, block_size, mouse_dx);
                 }
 
-                // Si cambió de nivel
                 if level_changed {
                     if current_level == level_files.len() - 1 {
                         state = GameState::Victory;
@@ -181,34 +184,31 @@ fn main() {
                     }
                 }
 
-                // Actualizar enemigos
                 for e in enemies.iter_mut() {
                     e.update(&player, &maze, block_size);
                     if distance(&e.pos, &player.pos) < 12.0 && player.health > 0 {
                         player.health = (player.health - 1).max(0);
+                        // === SONIDO DE GOLPE ===
+                        audio.play_hit();
                     }
                 }
 
-                // Detectar daño reciente
                 if player.health < last_health {
                     damage_overlay_alpha = 0.6;
                 }
                 last_health = player.health;
 
-                // Reducir opacidad con el tiempo si > 10 HP
                 if player.health > 10 {
                     damage_overlay_alpha = (damage_overlay_alpha - 0.02).max(0.0);
                 } else {
-                    damage_overlay_alpha = 0.8; // constante si salud baja
+                    damage_overlay_alpha = 0.8;
                 }
 
-                // Morir
                 if player.health <= 0 {
                     state = GameState::GameOver;
                     continue;
                 }
 
-                // Renderizar mundo
                 let mut fb = Framebuffer::new_buffer(window_width, window_height, Color::BLACK);
                 render_world_3d(&mut fb, &maze, &player, block_size, &texture_manager);
                 
@@ -226,7 +226,6 @@ fn main() {
                     }
                 }
 
-                // Minimap
                 let mut mini_fb = Framebuffer::new_buffer(240, 135, Color::BLACK);
                 render_world_2d(&mut mini_fb, &maze, &player, block_size);
                 
@@ -240,7 +239,6 @@ fn main() {
                 d.draw_text(&format!("HP: {}", player.health), 10, 10, 24, Color::RED);
                 d.draw_text(&format!("Level: {}", current_level + 1), 10, 40, 20, Color::YELLOW);
 
-                // Borde rojo de daño
                 if damage_overlay_alpha > 0.01 {
                     let color = Color::new(255, 0, 0, (damage_overlay_alpha * 255.0) as u8);
                     d.draw_rectangle_lines_ex(Rectangle::new(0.0, 0.0, window_width as f32, window_height as f32), 25.0, color);

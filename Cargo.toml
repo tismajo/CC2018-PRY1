@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 raylib = "5.5.1"
+rodio = "0.17"
+minifb = "0.28" 
