@@ -6,7 +6,7 @@ use crate::framebuffer::Framebuffer;
 pub type Maze = Vec<Vec<char>>;
 
 pub fn load_maze(filename: &str) -> Maze {
-    let file = File::open(filename).unwrap();
+    let file = File::open(filename).expect(&format!("No se pudo abrir el archivo: {}", filename));
     let reader = BufReader::new(file);
     
     reader
@@ -16,6 +16,7 @@ pub fn load_maze(filename: &str) -> Maze {
 }
 
 pub fn print_maze(maze: &Maze) {
+    println!("Dimensiones del laberinto: {}x{}", maze[0].len(), maze.len());
     for row in maze {
         for &cell in row {
             print!("{}", cell);
@@ -49,6 +50,7 @@ pub fn get_cell_color(cell: char) -> Color {
         'P' => Color::BLACK,
         'T' => Color::WHITE,
         'C' => Color::PURPLE,
+        '$' => Color::BLACK, // Puerta de nivel negra
         _ => Color::BLACK,
     }
 }

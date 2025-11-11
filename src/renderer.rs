@@ -42,6 +42,7 @@ pub fn render_world_3d(
             '3' => "OFF003",
             '4' => "OFF004",
             '5' => "OFF005",
+            '$' => "OFF001", // Puerta usa textura negra o la que prefieras
             _ => "OFF000",
         };
         
@@ -50,9 +51,11 @@ pub fn render_world_3d(
             let width = image.width as usize;
             let height = image.height as usize;
             
-            for y in stake_top..stake_bottom {
+            // Renderizar solo cada N píxeles para mejorar performance
+            let step = 1;
+            
+            for y in (stake_top..stake_bottom).step_by(step) {
                 if y >= 0 && y < framebuffer.height {
-                    // Mapeo de coordenadas para mantener aspecto cuadrado
                     let texture_y = ((y - stake_top) as f32 / (stake_bottom - stake_top) as f32)
                         * height as f32;
                     let texture_x = (intersect.offset * width as f32).min((width - 1) as f32);
@@ -63,16 +66,30 @@ pub fn render_world_3d(
                     let index = ty * width + tx;
                     if index < pixel_data.len() {
                         let pixel_color = pixel_data[index];
-                        let distance_factor = 1.0 / (safe_distance / 50.0 + 1.0);
-                        let color = Color::new(
-                            (pixel_color.r as f32 * distance_factor) as u8,
-                            (pixel_color.g as f32 * distance_factor) as u8,
-                            (pixel_color.b as f32 * distance_factor) as u8,
-                            255,
-                        );
+                        
+                        // Si es puerta de nivel ($), hacerla más oscura/negra
+                        let color = if cell_char == '$' {
+                            Color::new(10, 10, 10, 255) // Casi negro
+                        } else {
+                            let distance_factor = 1.0 / (safe_distance / 50.0 + 1.0);
+                            Color::new(
+                                (pixel_color.r as f32 * distance_factor) as u8,
+                                (pixel_color.g as f32 * distance_factor) as u8,
+                                (pixel_color.b as f32 * distance_factor) as u8,
+                                255,
+                            )
+                        };
                         
                         framebuffer.set_current_color(color);
                         framebuffer.set_pixel(i as i32, y);
+                        
+                        if step > 1 {
+                            for fill_y in 1..step as i32 {
+                                if y + fill_y < framebuffer.height {
+                                    framebuffer.set_pixel(i as i32, y + fill_y);
+                                }
+                            }
+                        }
                     }
                 }
             }

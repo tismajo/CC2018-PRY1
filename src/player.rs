@@ -11,7 +11,7 @@ impl Player {
         Player {
             pos: Vector2::new(x, y),
             a: std::f32::consts::PI / 3.0,
-            fov: std::f32::consts::PI / 3.0,  // FOV de 60 grados
+            fov: std::f32::consts::PI / 3.0,
         }
     }
     
@@ -48,13 +48,22 @@ impl Player {
             return false;
         }
         
-        // Verificar si la nueva posición es válida (no es una pared)
-        if maze[j][i] != '#' && maze[j][i] != 'L' {
+        let cell = maze[j][i];
+        
+        // Verificar si es una puerta de nivel ($)
+        if cell == '$' {
             self.pos.x = new_x;
             self.pos.y = new_y;
-            true
+            return true; // Retorna true para indicar cambio de nivel
+        }
+        
+        // Verificar si la nueva posición es válida (no es una pared)
+        if cell != '#' && cell != 'L' {
+            self.pos.x = new_x;
+            self.pos.y = new_y;
+            false // Movimiento normal, sin cambio de nivel
         } else {
-            false
+            false // Bloqueado por pared
         }
     }
 }

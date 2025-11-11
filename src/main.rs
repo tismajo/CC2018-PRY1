@@ -18,9 +18,13 @@ use crate::texture::TextureManager;
 use raylib::prelude::*;
 
 fn main() {
-    // Cargar laberinto desde archivo primero
-    let maze = load_maze("maze.txt");
-    println!("Laberinto cargado:");
+    // Nivel inicial
+    let mut current_level = 0;
+    let level_files = vec!["maze.txt", "maze1.txt", "maze2.txt"]; // Agregar más niveles aquí
+    
+    // Cargar laberinto inicial
+    let mut maze = load_maze(level_files[current_level]);
+    println!("Laberinto cargado: {}", level_files[current_level]);
     print_maze(&maze);
     
     // Encontrar posición inicial del jugador
@@ -31,16 +35,14 @@ fn main() {
     
     // Dimensiones base para 2D
     let block_size = 20;
-    let maze_width = 1380;
-    let maze_height = 940;
     
-    // Dimensiones para modo 3D (ajustadas para 192px de ancho por columna)
-    let window_width_3d = 1920;  // 10 columnas de 192px cada una
-    let window_height_3d = 1080;
+    // Dimensiones de ventana fija
+    let window_width = 1920;
+    let window_height = 1080;
     
-    // Inicializar ventana
+    // Inicializar ventana en modo ventana (no fullscreen)
     let (mut rl, thread) = raylib::init()
-        .size(window_width_3d, window_height_3d)
+        .size(window_width, window_height)
         .title("OFF (The 3D version)")
         .build();
     
@@ -48,35 +50,68 @@ fn main() {
     
     let texture_manager: TextureManager = TextureManager::new(&mut rl);
     
-    let mut mode = "3D"; // Modo inicial cambiado a 3D para ver el efecto
+    let mut mode = "3D"; // Modo inicial
     
     while !rl.window_should_close() {
         // Cambiar modo con la tecla M
         if rl.is_key_pressed(KeyboardKey::KEY_M) {
             mode = if mode == "2D" { "3D" } else { "2D" };
+        }
+        
+        // Procesar eventos de input y verificar si hay cambio de nivel
+        let level_changed = process_events(&rl, &mut player, &maze, block_size);
+        
+        // Si el jugador tocó una puerta de nivel
+        if level_changed {
+            current_level += 1;
             
-            // Ajustar tamaño de ventana según el modo
-            if mode == "2D" {
-                rl.set_window_size(maze_width, maze_height);
+            // Verificar si hay más niveles
+            if current_level < level_files.len() {
+                // Cargar siguiente nivel
+                maze = load_maze(level_files[current_level]);
+                println!("\n¡Nivel completado! Cargando: {}", level_files[current_level]);
+                print_maze(&maze);
+                
+                // Encontrar nueva posición inicial
+                let (new_x, new_y) = find_player_start(&maze)
+                    .expect("No se encontró posición inicial en el nuevo nivel");
+                
+                player.pos.x = new_x;
+                player.pos.y = new_y;
+                player.a = std::f32::consts::PI / 3.0; // Resetear ángulo
             } else {
-                rl.set_window_size(window_width_3d, window_height_3d);
+                // Volver al primer nivel (loop infinito)
+                current_level = 0;
+                maze = load_maze(level_files[current_level]);
+                println!("\n¡Todos los niveles completados! Reiniciando...");
+                print_maze(&maze);
+                
+                let (new_x, new_y) = find_player_start(&maze)
+                    .expect("No se encontró posición inicial");
+                
+                player.pos.x = new_x;
+                player.pos.y = new_y;
+                player.a = std::f32::consts::PI / 3.0;
             }
         }
         
-        // Procesar eventos de input
-        process_events(&rl, &mut player, &maze, block_size);
+        // Calcular dimensiones del laberinto dinámicamente
+        let maze_height_cells = maze.len();
+        let maze_width_cells = maze.iter().map(|row| row.len()).max().unwrap_or(0);
+        let maze_width = (maze_width_cells * block_size) as i32;
+        let maze_height = (maze_height_cells * block_size) as i32;
         
-        // Dimensiones de framebuffer según el modo
+        // Crear framebuffer según el modo
         let mut fb = if mode == "2D" {
             Framebuffer::new_buffer(
-                maze_width as i32,
-                maze_height as i32,
+                maze_width,
+                maze_height,
                 Color::BLACK,
             )
         } else {
             Framebuffer::new_buffer(
-                rl.get_screen_width(),
-                rl.get_screen_height(),
+                window_width,
+                window_height,
                 Color::BLACK,
             )
         };
@@ -93,13 +128,18 @@ fn main() {
         
         let mut d = rl.begin_drawing(&thread);
         d.clear_background(Color::BLACK);
-        d.draw_texture(&texture, 0, 0, Color::WHITE);
         
-        // Mostrar información de debug
-        d.draw_text(&format!("Pos: ({:.1}, {:.1})", player.pos.x, player.pos.y), 10, 10, 20, Color::WHITE);
-        d.draw_text(&format!("Angle: {:.2} rad", player.a), 10, 30, 20, Color::WHITE);
-        d.draw_text(&format!("FOV: {:.2} rad", player.fov), 10, 50, 20, Color::WHITE);
-        d.draw_text(&format!("Mode: {} (Press M to toggle)", mode), 10, 70, 20, Color::WHITE);
-        d.draw_text("Arrow Keys: Move | A/D: Strafe | Left/Right: Rotate", 10, 90, 20, Color::WHITE);
+        // Si es modo 2D, centrar el mapa en la ventana
+        if mode == "2D" {
+            let offset_x = (window_width - maze_width) / 2;
+            let offset_y = (window_height - maze_height) / 2;
+            d.draw_texture(&texture, offset_x, offset_y, Color::WHITE);
+        } else {
+            d.draw_texture(&texture, 0, 0, Color::WHITE);
+        }
+        
+        // Mostrar FPS y nivel actual
+        d.draw_text(&format!("FPS: {}", d.get_fps()), 10, 10, 30, Color::GREEN);
+        d.draw_text(&format!("Level: {}", current_level + 1), 10, 45, 30, Color::YELLOW);
     }
 }
