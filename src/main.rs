@@ -26,6 +26,7 @@ enum GameState {
 }
 
 fn main() {
+    // maze2.txt será el último nivel
     let level_files = vec!["maze.txt", "maze1.txt", "maze2.txt"];
     let mut current_level = 0usize;
 
@@ -98,20 +99,30 @@ fn main() {
         let mouse_dx = mouse_pos.x - prev_mouse_x;
         prev_mouse_x = mouse_pos.x;
 
-        let level_changed = process_events(&rl, &mut player, &maze, block_size, mouse_dx);
+        // Movimiento bloqueado si jugador muerto
+        let mut level_changed = false;
+        if player.health > 0 {
+            level_changed = process_events(&rl, &mut player, &maze, block_size, mouse_dx);
+        }
 
+        // === Detectar si tocó una salida ===
         if level_changed {
-            current_level += 1;
-            if current_level < level_files.len() {
-                maze = load_maze(level_files[current_level]);
-                println!("\n¡Nivel completado! Cargando: {}", level_files[current_level]);
-                print_maze(&maze);
-                let (nx, ny) = find_player_start(&maze).expect("No start in next level");
-                player.pos.x = nx;
-                player.pos.y = ny;
-                player.a = std::f32::consts::PI / 3.0;
-            } else {
+            // Si está en el último nivel y tocó E, ganar
+            if current_level == level_files.len() - 1 {
+                // Solo termina si tocó la E de maze2.txt
                 state = GameState::Victory;
+            } else {
+                // Avanzar nivel
+                current_level += 1;
+                if current_level < level_files.len() {
+                    maze = load_maze(level_files[current_level]);
+                    println!("\n¡Nivel completado! Cargando: {}", level_files[current_level]);
+                    print_maze(&maze);
+                    let (nx, ny) = find_player_start(&maze).expect("No start in next level");
+                    player.pos.x = nx;
+                    player.pos.y = ny;
+                    player.a = std::f32::consts::PI / 3.0;
+                }
             }
         }
 
@@ -129,7 +140,7 @@ fn main() {
         let mut fb = Framebuffer::new_buffer(window_width, window_height, Color::BLACK);
         render_world_3d(&mut fb, &maze, &player, block_size, &texture_manager);
 
-        // --- NUEVO: Dibujar sprites billboard de enemigos ---
+        // Dibujar enemigos
         for e in enemies.iter() {
             let key = e.texture_key.to_string();
             crate::renderer::draw_sprite_billboard(
@@ -142,11 +153,9 @@ fn main() {
             );
         }
 
-        // === Minimap ===
+        // Minimap
         let mut mini_fb = Framebuffer::new_buffer(240, 135, Color::BLACK);
         render_world_2d(&mut mini_fb, &maze, &player, block_size);
-
-        // --- NUEVO: Dibujar enemigos en el minimapa ---
         mini_fb.set_current_color(Color::ORANGE);
         for e in enemies.iter() {
             let px = e.pos.x * (mini_fb.width as f32 / (maze[0].len() as f32 * block_size as f32));
@@ -154,35 +163,31 @@ fn main() {
             mini_fb.draw_rect(px as i32 - 2, py as i32 - 2, 4, 4);
         }
 
-        // === Cargar texturas para Raylib ===
         let texture = rl.load_texture_from_image(&thread, &fb.buffer).unwrap();
         let mini_tex = rl.load_texture_from_image(&thread, &mini_fb.buffer).unwrap();
 
-        // === Controles post-render ===
         let key_respawn = rl.is_key_pressed(KeyboardKey::KEY_R);
         let key_menu = rl.is_key_pressed(KeyboardKey::KEY_M);
 
-        // === Dibujo final ===
-        {
-            let mut d = rl.begin_drawing(&thread);
-            d.clear_background(Color::BLACK);
-            d.draw_texture(&texture, 0, 0, Color::WHITE);
+        let mut d = rl.begin_drawing(&thread);
+        d.clear_background(Color::BLACK);
+        d.draw_texture(&texture, 0, 0, Color::WHITE);
 
-            // HUD
-            d.draw_texture(&mini_tex, window_width - 250, 10, Color::WHITE);
-            d.draw_text(&format!("HP: {}", player.health), 10, 10, 24, Color::RED);
-            d.draw_text(&format!("Level: {}", current_level + 1), 10, 40, 20, Color::YELLOW);
-            d.draw_text(&format!("FPS: {}", d.get_fps()), 10, 70, 20, Color::GREEN);
+        // HUD
+        d.draw_texture(&mini_tex, window_width - 250, 10, Color::WHITE);
+        d.draw_text(&format!("HP: {}", player.health), 10, 10, 24, Color::RED);
+        d.draw_text(&format!("Level: {}", current_level + 1), 10, 40, 20, Color::YELLOW);
+        d.draw_text(&format!("FPS: {}", d.get_fps()), 10, 70, 20, Color::GREEN);
 
-            if let GameState::Victory = state {
-                d.draw_text("¡VICTORY! Todos los niveles completados.", 300, 300, 40, Color::WHITE);
-                d.draw_text("Press M to return to menu", 300, 360, 24, Color::LIGHTGRAY);
-            }
-
-            if player.health <= 0 {
-                d.draw_text("YOU DIED - Press R to respawn", 400, 400, 30, Color::RED);
-            }
+        if let GameState::Victory = state {
+            d.draw_text("¡VICTORY! Has completado el juego.", 300, 300, 40, Color::WHITE);
+            d.draw_text("Press M to return to menu", 300, 360, 24, Color::LIGHTGRAY);
         }
+
+        if player.health <= 0 {
+            d.draw_text("YOU DIED - Press R to respawn", 400, 400, 30, Color::RED);
+        }
+        drop(d);
 
         // === Lógica post-dibujo ===
         if let GameState::Victory = state {
