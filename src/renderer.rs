@@ -254,14 +254,6 @@ pub fn render_world_2d(
     let py = (player.pos.y * scale) as i32;
     framebuffer.draw_rect(px - 2, py - 2, 4, 4);
 
-    // rayos / debug
-    let num_rays = 30; // menos para minimapa
-    for i in 0..num_rays {
-        let current_ray = i as f32 / num_rays as f32;
-        let ray_angle = player.a - (player.fov / 2.0) + (player.fov * current_ray);
-        cast_ray_debug(framebuffer, maze, player, ray_angle, block_size);
-    }
-
     // dibujar línea de dirección
     framebuffer.set_current_color(Color::YELLOW);
     let end_x = player.pos.x + 20.0 * player.a.cos();
