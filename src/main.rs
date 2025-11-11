@@ -57,7 +57,6 @@ fn main() {
     while !rl.window_should_close() {
         // ===== MENÚ PRINCIPAL =====
         if let GameState::Menu = state {
-            // ---- INPUT ----
             let key_1 = rl.is_key_pressed(KeyboardKey::KEY_ONE);
             let key_2 = rl.is_key_pressed(KeyboardKey::KEY_TWO);
             let key_3 = rl.is_key_pressed(KeyboardKey::KEY_THREE);
@@ -83,7 +82,7 @@ fn main() {
                 break;
             }
 
-            // ---- DIBUJO ----
+            // ---- DIBUJO DEL MENÚ ----
             let mut d = rl.begin_drawing(&thread);
             d.clear_background(Color::BLACK);
             d.draw_text("WELCOME - PRESS 1/2/3 TO SELECT A LEVEL", 100, 100, 30, Color::WHITE);
@@ -126,20 +125,44 @@ fn main() {
             }
         }
 
-        // === Renderizado (fuera del bloque de dibujo) ===
+        // === Renderizado (3D + 2D) ===
         let mut fb = Framebuffer::new_buffer(window_width, window_height, Color::BLACK);
         render_world_3d(&mut fb, &maze, &player, block_size, &texture_manager);
-        let texture = rl.load_texture_from_image(&thread, &fb.buffer).unwrap();
 
+        // --- NUEVO: Dibujar sprites billboard de enemigos ---
+        for e in enemies.iter() {
+            let key = e.texture_key.to_string();
+            crate::renderer::draw_sprite_billboard(
+                &mut fb,
+                e.pos,
+                &player,
+                block_size,
+                &texture_manager,
+                &key,
+            );
+        }
+
+        // === Minimap ===
         let mut mini_fb = Framebuffer::new_buffer(240, 135, Color::BLACK);
         render_world_2d(&mut mini_fb, &maze, &player, block_size);
+
+        // --- NUEVO: Dibujar enemigos en el minimapa ---
+        mini_fb.set_current_color(Color::ORANGE);
+        for e in enemies.iter() {
+            let px = e.pos.x * (mini_fb.width as f32 / (maze[0].len() as f32 * block_size as f32));
+            let py = e.pos.y * (mini_fb.height as f32 / (maze.len() as f32 * block_size as f32));
+            mini_fb.draw_rect(px as i32 - 2, py as i32 - 2, 4, 4);
+        }
+
+        // === Cargar texturas para Raylib ===
+        let texture = rl.load_texture_from_image(&thread, &fb.buffer).unwrap();
         let mini_tex = rl.load_texture_from_image(&thread, &mini_fb.buffer).unwrap();
 
-        // ---- INPUTS post-render (leer antes del draw) ----
+        // === Controles post-render ===
         let key_respawn = rl.is_key_pressed(KeyboardKey::KEY_R);
         let key_menu = rl.is_key_pressed(KeyboardKey::KEY_M);
 
-        // === BLOQUE DE DIBUJO ===
+        // === Dibujo final ===
         {
             let mut d = rl.begin_drawing(&thread);
             d.clear_background(Color::BLACK);
@@ -159,9 +182,9 @@ fn main() {
             if player.health <= 0 {
                 d.draw_text("YOU DIED - Press R to respawn", 400, 400, 30, Color::RED);
             }
-        } // <- Aquí termina el mutable borrow de rl (d)
+        }
 
-        // === ACCIONES POST-DIBUJO ===
+        // === Lógica post-dibujo ===
         if let GameState::Victory = state {
             if key_menu {
                 current_level = 0;

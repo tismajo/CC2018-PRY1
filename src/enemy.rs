@@ -2,11 +2,11 @@ use raylib::math::Vector2;
 use crate::player::Player;
 use crate::maze::Maze;
 
-/// Enemigo básico
+/// Enemigo básico (dato: pos en píxeles, no en celdas)
 #[derive(Clone)]
 pub struct Enemy {
     pub pos: Vector2,
-    pub texture_key: char,
+    pub texture_key: char, // 'F' en tus mapas
     pub anim_offset: f32,
 }
 
@@ -20,17 +20,45 @@ impl Enemy {
     }
 
     /// Mueve al enemigo hacia el jugador, evitando paredes de forma simple.
-    pub fn update_towards_player(&mut self, player: &Player, _maze: &Maze) {
-        let speed = 0.8;
+    /// Nota: velocidad en píxeles por frame
+    pub fn update_towards_player(&mut self, player: &Player, maze: &Maze) {
+        let speed = 1.2; // ajustable
         let dir_x = player.pos.x - self.pos.x;
         let dir_y = player.pos.y - self.pos.y;
         let len = (dir_x * dir_x + dir_y * dir_y).sqrt().max(0.001);
         let nx = self.pos.x + (dir_x / len) * speed;
         let ny = self.pos.y + (dir_y / len) * speed;
 
-        // update
-        self.pos.x = nx;
-        self.pos.y = ny;
+        // simple collision: comprobar celda destino
+        let block_size = 20.0;
+        let i = (nx / block_size) as isize;
+        let j = (ny / block_size) as isize;
+
+        if j >= 0 && i >= 0 {
+            let j_u = j as usize;
+            let i_u = i as usize;
+            if j_u < maze.len() && i_u < maze[0].len() {
+                let cell = maze[j_u][i_u];
+                if cell != '#' && cell != 'L' {
+                    // moverse
+                    self.pos.x = nx;
+                    self.pos.y = ny;
+                } else {
+                    // intentar deslizarse en X o Y para no quedar pegado
+                    let nx_only = self.pos.x + (dir_x / len) * speed;
+                    let ny_only = self.pos.y + (dir_y / len) * speed;
+                    let i_x = (nx_only / block_size) as isize;
+                    let j_y = (ny_only / block_size) as isize;
+                    let can_x = i_x >= 0 && (j as usize) < maze.len() && (i_x as usize) < maze[0].len() && maze[j as usize][i_x as usize] != '#';
+                    let can_y = j_y >= 0 && (j_y as usize) < maze.len() && (i as usize) < maze[0].len() && maze[j_y as usize][i as usize] != '#';
+                    if can_x {
+                        self.pos.x = nx_only;
+                    } else if can_y {
+                        self.pos.y = ny_only;
+                    }
+                }
+            }
+        }
 
         // anim offset simple (oscila para simular "animación")
         self.anim_offset += 0.12;

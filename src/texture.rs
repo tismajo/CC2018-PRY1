@@ -25,12 +25,31 @@ impl TextureManager {
             }
         }
 
-        // Intento cargar sprites de enemigo/player (opcional)
-        let extra = vec![("enemy", "assets/enemy.png"), ("player_anim", "assets/player_anim.png")];
+        // Sprites del juego: claves: "F" (enemy), "C" (chest), "T" (worker/player sprite)
+        let sprite_list = vec![
+            ("F", "assets/enemy.png"),
+            ("C", "assets/chest.png"),
+            ("T", "assets/worker.png"),
+        ];
+
+        for (key, path) in sprite_list {
+            match Image::load_image(path) {
+                Ok(img) => {
+                    images.insert(key.to_string(), img);
+                    println!("Sprite cargado: {} -> {}", key, path);
+                }
+                Err(e) => {
+                    eprintln!("No se encontró sprite {}: {:?}", path, e);
+                }
+            }
+        }
+
+        // Mantener compatibilidad: cargar player_anim o enemy alternativos si existen
+        let extra = vec![("player_anim", "assets/player_anim.png"), ("enemy_alt", "assets/enemy_alt.png")];
         for (key, path) in extra {
             match Image::load_image(path) {
                 Ok(img) => { images.insert(key.to_string(), img); println!("Sprite cargado: {}", key); },
-                Err(_) => { eprintln!("No se encontró sprite {}", path); }
+                Err(_) => { /* silencioso */ }
             }
         }
 
