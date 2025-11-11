@@ -12,28 +12,29 @@ pub fn render_world_3d(
     block_size: usize,
     textures: &TextureManager,
 ) {
-    let num_rays = framebuffer.width as usize;
+    // Reducir carga de raycasting: procesar cada RAY_STEP píxeles horizontalmente
+    let ray_step: usize = 3; // ajusta: más grande => menos raycasts => +fps (pero más pixelado)
+    let num_rays = (framebuffer.width as usize + ray_step - 1) / ray_step;
     let hw = framebuffer.width as f32 / 2.0;
     let hh = framebuffer.height as f32 / 2.0;
-    
-    // Ajustado para que las columnas sean cuadradas de 192 píxeles
-    let column_width = 192.0;
-    let distance_to_projection_plane = (framebuffer.width as f32 / num_rays as f32) * column_width;
-    
+
+    // Distancia al plano de proyección (valor razonable)
+    let distance_to_projection_plane = (framebuffer.width as f32 / (2.0 * (player.fov / 2.0).tan())).abs();
+
     for i in 0..num_rays {
+        let screen_x = (i * ray_step) as i32; // coordenada x real en framebuffer
         let current_ray = i as f32 / num_rays as f32;
         let ray_angle = player.a - (player.fov / 2.0) + (player.fov * current_ray);
         let intersect = cast_ray(maze, player, ray_angle, block_size);
-        
+
         let safe_distance = intersect.distance.max(0.1);
-        
-        // Calcular altura para que sea cuadrada (192x192)
-        let stake_height = column_width;
+        // Altura proyectada (tamaño del bloque / distancia multiplicado por distancia al plano)
+        let stake_height = block_size as f32;
         let adjusted_height = (stake_height / safe_distance) * distance_to_projection_plane;
-        
+
         let stake_top = (hh - (adjusted_height / 2.0)) as i32;
         let stake_bottom = (hh + (adjusted_height / 2.0)) as i32;
-        
+
         let cell_char = intersect.impact;
         let texture_key = match cell_char {
             'E' => "OFF000",
@@ -42,34 +43,29 @@ pub fn render_world_3d(
             '3' => "OFF003",
             '4' => "OFF004",
             '5' => "OFF005",
-            '$' => "OFF001", // Puerta usa textura negra o la que prefieras
+            '$' => "OFF001",
             _ => "OFF000",
         };
-        
+
         if let Some(image) = textures.get(texture_key) {
             let pixel_data = image.get_image_data();
             let width = image.width as usize;
             let height = image.height as usize;
-            
-            // Renderizar solo cada N píxeles para mejorar performance
-            let step = 1;
-            
-            for y in (stake_top..stake_bottom).step_by(step) {
+
+            // Renderizar un column de ancho ray_step en x
+            for y in stake_top..stake_bottom {
                 if y >= 0 && y < framebuffer.height {
-                    let texture_y = ((y - stake_top) as f32 / (stake_bottom - stake_top) as f32)
-                        * height as f32;
+                    let texture_y = ((y - stake_top) as f32 / (stake_bottom - stake_top) as f32) * height as f32;
                     let texture_x = (intersect.offset * width as f32).min((width - 1) as f32);
-                    
+
                     let tx = texture_x as usize;
                     let ty = (texture_y as usize).min(height - 1);
-                    
+
                     let index = ty * width + tx;
                     if index < pixel_data.len() {
                         let pixel_color = pixel_data[index];
-                        
-                        // Si es puerta de nivel ($), hacerla más oscura/negra
                         let color = if cell_char == '$' {
-                            Color::new(10, 10, 10, 255) // Casi negro
+                            Color::new(10, 10, 10, 255)
                         } else {
                             let distance_factor = 1.0 / (safe_distance / 50.0 + 1.0);
                             Color::new(
@@ -79,22 +75,20 @@ pub fn render_world_3d(
                                 255,
                             )
                         };
-                        
+
                         framebuffer.set_current_color(color);
-                        framebuffer.set_pixel(i as i32, y);
-                        
-                        if step > 1 {
-                            for fill_y in 1..step as i32 {
-                                if y + fill_y < framebuffer.height {
-                                    framebuffer.set_pixel(i as i32, y + fill_y);
-                                }
+                        // llenar la columna de ancho ray_step
+                        for sx in 0..(ray_step as i32) {
+                            let px = screen_x + sx;
+                            if px >= 0 && px < framebuffer.width {
+                                framebuffer.set_pixel(px, y);
                             }
                         }
                     }
                 }
             }
         }
-        
+
         // Suelo
         let floor_distance_factor = 1.0 / (safe_distance / 50.0 + 1.0);
         framebuffer.set_current_color(Color::new(
@@ -104,9 +98,14 @@ pub fn render_world_3d(
             255,
         ));
         for y in stake_bottom..framebuffer.height {
-            framebuffer.set_pixel(i as i32, y);
+            for sx in 0..(ray_step as i32) {
+                let px = screen_x + sx;
+                if px >= 0 && px < framebuffer.width {
+                    framebuffer.set_pixel(px, y);
+                }
+            }
         }
-        
+
         // Cielo
         let sky_distance_factor = 1.0 / (safe_distance / 60.0 + 1.0);
         framebuffer.set_current_color(Color::new(
@@ -116,7 +115,12 @@ pub fn render_world_3d(
             255,
         ));
         for y in 0..stake_top {
-            framebuffer.set_pixel(i as i32, y);
+            for sx in 0..(ray_step as i32) {
+                let px = screen_x + sx;
+                if px >= 0 && px < framebuffer.width {
+                    framebuffer.set_pixel(px, y);
+                }
+            }
         }
     }
 }
@@ -128,17 +132,17 @@ pub fn render_world_2d(
     block_size: usize,
 ) {
     crate::maze::render_maze(framebuffer, maze, block_size);
-    
+
     framebuffer.set_current_color(Color::RED);
     framebuffer.draw_rect(player.pos.x as i32 - 2, player.pos.y as i32 - 2, 4, 4);
-    
+
     let num_rays = 60;
     for i in 0..num_rays {
         let current_ray = i as f32 / num_rays as f32;
         let ray_angle = player.a - (player.fov / 2.0) + (player.fov * current_ray);
         cast_ray_debug(framebuffer, maze, player, ray_angle, block_size);
     }
-    
+
     framebuffer.set_current_color(Color::YELLOW);
     let end_x = player.pos.x + 20.0 * player.a.cos();
     let end_y = player.pos.y + 20.0 * player.a.sin();

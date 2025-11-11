@@ -8,7 +8,7 @@ pub type Maze = Vec<Vec<char>>;
 pub fn load_maze(filename: &str) -> Maze {
     let file = File::open(filename).expect(&format!("No se pudo abrir el archivo: {}", filename));
     let reader = BufReader::new(file);
-    
+
     reader
         .lines()
         .map(|line| line.unwrap().chars().collect())
@@ -51,6 +51,7 @@ pub fn get_cell_color(cell: char) -> Color {
         'T' => Color::WHITE,
         'C' => Color::PURPLE,
         '$' => Color::BLACK, // Puerta de nivel negra
+        '.' => Color::GOLD,
         _ => Color::BLACK,
     }
 }
@@ -65,9 +66,9 @@ fn draw_cell(
     let color = get_cell_color(cell);
     framebuffer.set_current_color(color);
     framebuffer.draw_rect(
-        xo as i32, 
-        yo as i32, 
-        block_size as i32, 
+        xo as i32,
+        yo as i32,
+        block_size as i32,
         block_size as i32
     );
 }

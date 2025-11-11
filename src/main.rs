@@ -15,131 +15,165 @@ use crate::maze::{find_player_start, load_maze, print_maze};
 use crate::input::process_events;
 use crate::renderer::{render_world_2d, render_world_3d};
 use crate::texture::TextureManager;
+use crate::enemy::{Enemy, distance};
+
 use raylib::prelude::*;
 
+enum GameState {
+    Menu,
+    Playing,
+    Victory,
+}
+
 fn main() {
-    // Nivel inicial
-    let mut current_level = 0;
-    let level_files = vec!["maze.txt", "maze1.txt", "maze2.txt"]; // Agregar más niveles aquí
-    
-    // Cargar laberinto inicial
+    let level_files = vec!["maze.txt", "maze1.txt", "maze2.txt"];
+    let mut current_level = 0usize;
+
     let mut maze = load_maze(level_files[current_level]);
     println!("Laberinto cargado: {}", level_files[current_level]);
     print_maze(&maze);
-    
-    // Encontrar posición inicial del jugador
+
     let (start_x, start_y) = find_player_start(&maze)
-        .expect("No se encontró posición inicial del jugador (carácter 'P' o 'p')");
-    
+        .expect("No se encontró posición inicial del jugador");
+
     let mut player = Player::new(start_x, start_y);
-    
-    // Dimensiones base para 2D
-    let block_size = 20;
-    
-    // Dimensiones de ventana fija
-    let window_width = 1920;
-    let window_height = 1080;
-    
-    // Inicializar ventana en modo ventana (no fullscreen)
+    let mut enemies: Vec<Enemy> = vec![Enemy::new(start_x + 200.0, start_y + 50.0, 'F')];
+
+    let block_size = 20usize;
+    let window_width = 1280;
+    let window_height = 720;
+
     let (mut rl, thread) = raylib::init()
         .size(window_width, window_height)
-        .title("OFF (The 3D version)")
+        .title("OFF (The 3D version) - Mejorado")
         .build();
-    
+
     rl.set_target_fps(60);
-    
-    let texture_manager: TextureManager = TextureManager::new(&mut rl);
-    
-    let mut mode = "3D"; // Modo inicial
-    
+    let texture_manager = TextureManager::new(&mut rl);
+
+    let mut prev_mouse_x = rl.get_mouse_position().x;
+    let mut state = GameState::Menu;
+
     while !rl.window_should_close() {
-        // Cambiar modo con la tecla M
-        if rl.is_key_pressed(KeyboardKey::KEY_M) {
-            mode = if mode == "2D" { "3D" } else { "2D" };
+        // ===== MENÚ PRINCIPAL =====
+        if let GameState::Menu = state {
+            // ---- INPUT ----
+            let key_1 = rl.is_key_pressed(KeyboardKey::KEY_ONE);
+            let key_2 = rl.is_key_pressed(KeyboardKey::KEY_TWO);
+            let key_3 = rl.is_key_pressed(KeyboardKey::KEY_THREE);
+            let key_enter = rl.is_key_pressed(KeyboardKey::KEY_ENTER);
+            let key_escape = rl.is_key_pressed(KeyboardKey::KEY_ESCAPE);
+
+            if key_1 { current_level = 0; }
+            if key_2 && level_files.len() > 1 { current_level = 1; }
+            if key_3 && level_files.len() > 2 { current_level = 2; }
+
+            if key_enter {
+                maze = load_maze(level_files[current_level]);
+                let (sx, sy) = find_player_start(&maze).expect("No start found");
+                player.pos.x = sx;
+                player.pos.y = sy;
+                player.a = std::f32::consts::PI / 3.0;
+                player.health = 100;
+                enemies = vec![Enemy::new(player.pos.x + 200.0, player.pos.y, 'F')];
+                state = GameState::Playing;
+            }
+
+            if key_escape {
+                break;
+            }
+
+            // ---- DIBUJO ----
+            let mut d = rl.begin_drawing(&thread);
+            d.clear_background(Color::BLACK);
+            d.draw_text("WELCOME - PRESS 1/2/3 TO SELECT A LEVEL", 100, 100, 30, Color::WHITE);
+            d.draw_text("Press ENTER to start chosen level", 100, 140, 20, Color::WHITE);
+            d.draw_text(&format!("Selected level: {}", current_level + 1), 100, 180, 24, Color::YELLOW);
+            d.draw_text("1 - level 1, 2 - level 2, 3 - level 3", 100, 220, 20, Color::LIGHTGRAY);
+            d.draw_text("ESC - quit", 100, 260, 20, Color::LIGHTGRAY);
+            continue;
         }
-        
-        // Procesar eventos de input y verificar si hay cambio de nivel
-        let level_changed = process_events(&rl, &mut player, &maze, block_size);
-        
-        // Si el jugador tocó una puerta de nivel
+
+        // ===== GAMEPLAY =====
+        let mouse_pos = rl.get_mouse_position();
+        let mouse_dx = mouse_pos.x - prev_mouse_x;
+        prev_mouse_x = mouse_pos.x;
+
+        let level_changed = process_events(&rl, &mut player, &maze, block_size, mouse_dx);
+
         if level_changed {
             current_level += 1;
-            
-            // Verificar si hay más niveles
             if current_level < level_files.len() {
-                // Cargar siguiente nivel
                 maze = load_maze(level_files[current_level]);
                 println!("\n¡Nivel completado! Cargando: {}", level_files[current_level]);
                 print_maze(&maze);
-                
-                // Encontrar nueva posición inicial
-                let (new_x, new_y) = find_player_start(&maze)
-                    .expect("No se encontró posición inicial en el nuevo nivel");
-                
-                player.pos.x = new_x;
-                player.pos.y = new_y;
-                player.a = std::f32::consts::PI / 3.0; // Resetear ángulo
-            } else {
-                // Volver al primer nivel (loop infinito)
-                current_level = 0;
-                maze = load_maze(level_files[current_level]);
-                println!("\n¡Todos los niveles completados! Reiniciando...");
-                print_maze(&maze);
-                
-                let (new_x, new_y) = find_player_start(&maze)
-                    .expect("No se encontró posición inicial");
-                
-                player.pos.x = new_x;
-                player.pos.y = new_y;
+                let (nx, ny) = find_player_start(&maze).expect("No start in next level");
+                player.pos.x = nx;
+                player.pos.y = ny;
                 player.a = std::f32::consts::PI / 3.0;
+            } else {
+                state = GameState::Victory;
             }
         }
-        
-        // Calcular dimensiones del laberinto dinámicamente
-        let maze_height_cells = maze.len();
-        let maze_width_cells = maze.iter().map(|row| row.len()).max().unwrap_or(0);
-        let maze_width = (maze_width_cells * block_size) as i32;
-        let maze_height = (maze_height_cells * block_size) as i32;
-        
-        // Crear framebuffer según el modo
-        let mut fb = if mode == "2D" {
-            Framebuffer::new_buffer(
-                maze_width,
-                maze_height,
-                Color::BLACK,
-            )
-        } else {
-            Framebuffer::new_buffer(
-                window_width,
-                window_height,
-                Color::BLACK,
-            )
-        };
-        
-        // Renderizar según el modo actual
-        if mode == "2D" {
-            render_world_2d(&mut fb, &maze, &player, block_size);
-        } else {
-            render_world_3d(&mut fb, &maze, &player, block_size, &texture_manager);        
+
+        // === Actualizar enemigos ===
+        for e in enemies.iter_mut() {
+            e.update_towards_player(&player, &maze);
+            if distance(&e.pos, &player.pos) < 12.0 {
+                if player.health > 0 {
+                    player.health = (player.health - 1).max(0);
+                }
+            }
         }
-        
-        // Convertir framebuffer a textura
+
+        // === Renderizado (fuera del bloque de dibujo) ===
+        let mut fb = Framebuffer::new_buffer(window_width, window_height, Color::BLACK);
+        render_world_3d(&mut fb, &maze, &player, block_size, &texture_manager);
         let texture = rl.load_texture_from_image(&thread, &fb.buffer).unwrap();
-        
-        let mut d = rl.begin_drawing(&thread);
-        d.clear_background(Color::BLACK);
-        
-        // Si es modo 2D, centrar el mapa en la ventana
-        if mode == "2D" {
-            let offset_x = (window_width - maze_width) / 2;
-            let offset_y = (window_height - maze_height) / 2;
-            d.draw_texture(&texture, offset_x, offset_y, Color::WHITE);
-        } else {
+
+        let mut mini_fb = Framebuffer::new_buffer(240, 135, Color::BLACK);
+        render_world_2d(&mut mini_fb, &maze, &player, block_size);
+        let mini_tex = rl.load_texture_from_image(&thread, &mini_fb.buffer).unwrap();
+
+        // ---- INPUTS post-render (leer antes del draw) ----
+        let key_respawn = rl.is_key_pressed(KeyboardKey::KEY_R);
+        let key_menu = rl.is_key_pressed(KeyboardKey::KEY_M);
+
+        // === BLOQUE DE DIBUJO ===
+        {
+            let mut d = rl.begin_drawing(&thread);
+            d.clear_background(Color::BLACK);
             d.draw_texture(&texture, 0, 0, Color::WHITE);
+
+            // HUD
+            d.draw_texture(&mini_tex, window_width - 250, 10, Color::WHITE);
+            d.draw_text(&format!("HP: {}", player.health), 10, 10, 24, Color::RED);
+            d.draw_text(&format!("Level: {}", current_level + 1), 10, 40, 20, Color::YELLOW);
+            d.draw_text(&format!("FPS: {}", d.get_fps()), 10, 70, 20, Color::GREEN);
+
+            if let GameState::Victory = state {
+                d.draw_text("¡VICTORY! Todos los niveles completados.", 300, 300, 40, Color::WHITE);
+                d.draw_text("Press M to return to menu", 300, 360, 24, Color::LIGHTGRAY);
+            }
+
+            if player.health <= 0 {
+                d.draw_text("YOU DIED - Press R to respawn", 400, 400, 30, Color::RED);
+            }
+        } // <- Aquí termina el mutable borrow de rl (d)
+
+        // === ACCIONES POST-DIBUJO ===
+        if let GameState::Victory = state {
+            if key_menu {
+                current_level = 0;
+                state = GameState::Menu;
+            }
         }
-        
-        // Mostrar FPS y nivel actual
-        d.draw_text(&format!("FPS: {}", d.get_fps()), 10, 10, 30, Color::GREEN);
-        d.draw_text(&format!("Level: {}", current_level + 1), 10, 45, 30, Color::YELLOW);
+
+        if player.health <= 0 && key_respawn {
+            let (nx, ny) = find_player_start(&maze).expect("No start to respawn");
+            player.pos.x = nx;
+            player.pos.y = ny;
+            player.health = 100;
+        }
     }
 }
