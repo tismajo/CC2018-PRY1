@@ -8,7 +8,7 @@ mod renderer;
 mod intersect;
 mod texture;
 mod enemy;
-mod audio; // <--- NUEVO: sistema de sonido
+mod audio;
 
 use crate::framebuffer::Framebuffer;
 use crate::player::Player;
@@ -18,9 +18,10 @@ use crate::renderer::{render_world_2d, render_world_3d, draw_sprite_billboard};
 use crate::texture::TextureManager;
 use crate::enemy::{Enemy, distance};
 use crate::caster::is_blocked_by_wall;
-use crate::audio::Audio; // <--- NUEVO
+use crate::audio::Audio;
 
 use raylib::prelude::*;
+use std::time::Instant;
 
 enum GameState {
     Menu,
@@ -29,12 +30,11 @@ enum GameState {
     GameOver,
 }
 
-/// Nueva estructura para representar workers (T en el mapa)
+/// Worker (T)
 #[derive(Clone)]
 struct Worker {
     pos: Vector2,
 }
-
 impl Worker {
     fn new(x: f32, y: f32) -> Self {
         Worker {
@@ -43,10 +43,24 @@ impl Worker {
     }
 }
 
+/// Chest (C)
+#[derive(Clone)]
+struct Chest {
+    pos: Vector2,
+    opened: bool, // nuevo: si ya fue abierto
+}
+impl Chest {
+    fn new(x: f32, y: f32) -> Self {
+        Chest {
+            pos: Vector2::new(x, y),
+            opened: false,
+        }
+    }
+}
+
 /// Busca todas las posiciones de un carácter específico en el maze
 fn find_positions_in_maze(maze: &maze::Maze, target: char, block_size: usize) -> Vec<(f32, f32)> {
     let mut positions = Vec::new();
-    
     for (j, row) in maze.iter().enumerate() {
         for (i, &cell) in row.iter().enumerate() {
             if cell == target {
@@ -56,7 +70,6 @@ fn find_positions_in_maze(maze: &maze::Maze, target: char, block_size: usize) ->
             }
         }
     }
-    
     positions
 }
 
@@ -71,25 +84,32 @@ fn main() {
     
     let (start_x, start_y) = find_player_start(&maze)
         .expect("No se encontró posición inicial del jugador");
-    
     let mut player = Player::new(start_x, start_y);
     
-    // Buscar enemigos (F)
     let enemy_positions = find_positions_in_maze(&maze, 'F', block_size);
     let mut enemies: Vec<Enemy> = enemy_positions
         .iter()
         .map(|(x, y)| Enemy::new(*x, *y, 'F'))
         .collect();
-    
-    // Buscar workers (T)
+
     let worker_positions = find_positions_in_maze(&maze, 'T', block_size);
     let mut workers: Vec<Worker> = worker_positions
         .iter()
         .map(|(x, y)| Worker::new(*x, *y))
         .collect();
-    
-    println!("Enemigos encontrados: {}", enemies.len());
-    println!("Workers encontrados: {}", workers.len());
+
+    let chest_positions = find_positions_in_maze(&maze, 'C', block_size);
+    let mut chests: Vec<Chest> = chest_positions
+        .iter()
+        .map(|(x, y)| Chest::new(*x, *y))
+        .collect();
+
+    println!(
+        "Enemigos: {}, Workers: {}, Cofres: {}",
+        enemies.len(),
+        workers.len(),
+        chests.len()
+    );
     
     let window_width = 1280;
     let window_height = 720;
@@ -101,14 +121,15 @@ fn main() {
     
     rl.set_target_fps(60);
 
-    // === AUDIO ===
-    let mut audio = Audio::new(); // música de fondo
+    let mut audio = Audio::new();
     let mut last_health = player.health;
-
     let texture_manager = TextureManager::new(&mut rl);
     let mut prev_mouse_x = rl.get_mouse_position().x;
     let mut state = GameState::Menu;
-    let mut damage_overlay_alpha: f32 = 0.0; // Opacidad del borde rojo
+    let mut damage_overlay_alpha: f32 = 0.0;
+
+    // === NUEVO: mensaje de cofre ===
+    let mut chest_message_timer: Option<Instant> = None;
 
     while !rl.window_should_close() {
         match state {
@@ -132,26 +153,32 @@ fn main() {
                     player.health = 100;
                     damage_overlay_alpha = 0.0;
 
-                    let enemy_pos = find_positions_in_maze(&maze, 'F', block_size);
-                    enemies = enemy_pos.iter().map(|(x, y)| Enemy::new(*x, *y, 'F')).collect();
-                    
-                    let worker_pos = find_positions_in_maze(&maze, 'T', block_size);
-                    workers = worker_pos.iter().map(|(x, y)| Worker::new(*x, *y)).collect();
+                    enemies = find_positions_in_maze(&maze, 'F', block_size)
+                        .iter()
+                        .map(|(x, y)| Enemy::new(*x, *y, 'F'))
+                        .collect();
+                    workers = find_positions_in_maze(&maze, 'T', block_size)
+                        .iter()
+                        .map(|(x, y)| Worker::new(*x, *y))
+                        .collect();
+                    chests = find_positions_in_maze(&maze, 'C', block_size)
+                        .iter()
+                        .map(|(x, y)| Chest::new(*x, *y))
+                        .collect();
                     
                     state = GameState::Playing;
                 }
-                
                 if key_escape {
                     break;
                 }
                 
                 let mut d = rl.begin_drawing(&thread);
                 d.clear_background(Color::BLACK);
-                d.draw_text("WELCOME - PRESS 1/2/3 TO SELECT A LEVEL", 100, 100, 30, Color::WHITE);
-                d.draw_text("Press ENTER to start chosen level", 100, 140, 20, Color::WHITE);
-                d.draw_text(&format!("Selected level: {}", current_level + 1), 100, 180, 24, Color::YELLOW);
-                d.draw_text("1 - level 1, 2 - level 2, 3 - level 3", 100, 220, 20, Color::LIGHTGRAY);
-                d.draw_text("ESC - quit", 100, 260, 20, Color::LIGHTGRAY);
+                d.draw_text("OFF - Presiona 1, 2, 3 para elegir la zona", 100, 100, 30, Color::WHITE);
+                d.draw_text("Presiona Enter", 100, 140, 20, Color::WHITE);
+                d.draw_text(&format!("Zona: {}", current_level + 1), 100, 180, 24, Color::YELLOW);
+                d.draw_text("1 - zona 1 1, 2 - zona 2, 3 - zona 3", 100, 220, 20, Color::LIGHTGRAY);
+                d.draw_text("ESC - exit", 100, 260, 20, Color::LIGHTGRAY);
             }
 
             GameState::Playing => {
@@ -177,22 +204,40 @@ fn main() {
                         player.health = 100;
                         damage_overlay_alpha = 0.0;
 
-                        let enemy_pos = find_positions_in_maze(&maze, 'F', block_size);
-                        enemies = enemy_pos.iter().map(|(x, y)| Enemy::new(*x, *y, 'F')).collect();
-                        let worker_pos = find_positions_in_maze(&maze, 'T', block_size);
-                        workers = worker_pos.iter().map(|(x, y)| Worker::new(*x, *y)).collect();
+                        enemies = find_positions_in_maze(&maze, 'F', block_size)
+                            .iter()
+                            .map(|(x, y)| Enemy::new(*x, *y, 'F'))
+                            .collect();
+                        workers = find_positions_in_maze(&maze, 'T', block_size)
+                            .iter()
+                            .map(|(x, y)| Worker::new(*x, *y))
+                            .collect();
+                        chests = find_positions_in_maze(&maze, 'C', block_size)
+                            .iter()
+                            .map(|(x, y)| Chest::new(*x, *y))
+                            .collect();
                     }
                 }
 
+                // === Enemigos ===
                 for e in enemies.iter_mut() {
                     e.update(&player, &maze, block_size);
                     if distance(&e.pos, &player.pos) < 12.0 && player.health > 0 {
                         player.health = (player.health - 1).max(0);
-                        // === SONIDO DE GOLPE ===
                         audio.play_hit();
                     }
                 }
 
+                // === Cofres ===
+                for c in chests.iter_mut() {
+                    if !c.opened && distance(&c.pos, &player.pos) < 15.0 {
+                        c.opened = true;
+                        audio.play_chest();
+                        chest_message_timer = Some(Instant::now());
+                    }
+                }
+
+                // Actualiza overlay de daño
                 if player.health < last_health {
                     damage_overlay_alpha = 0.6;
                 }
@@ -209,9 +254,11 @@ fn main() {
                     continue;
                 }
 
+                // === Render ===
                 let mut fb = Framebuffer::new_buffer(window_width, window_height, Color::BLACK);
                 render_world_3d(&mut fb, &maze, &player, block_size, &texture_manager);
                 
+                // Enemigos
                 for e in enemies.iter() {
                     let blocked = is_blocked_by_wall(player.pos.x, player.pos.y, e.pos.x, e.pos.y, &maze, block_size);
                     if !blocked {
@@ -219,10 +266,21 @@ fn main() {
                     }
                 }
 
+                // Workers
                 for w in workers.iter() {
                     let blocked = is_blocked_by_wall(player.pos.x, player.pos.y, w.pos.x, w.pos.y, &maze, block_size);
                     if !blocked {
                         draw_sprite_billboard(&mut fb, w.pos, &player, block_size, &texture_manager, "T");
+                    }
+                }
+
+                // Cofres (solo se dibujan los no abiertos)
+                for c in chests.iter() {
+                    if !c.opened {
+                        let blocked = is_blocked_by_wall(player.pos.x, player.pos.y, c.pos.x, c.pos.y, &maze, block_size);
+                        if !blocked {
+                            draw_sprite_billboard(&mut fb, c.pos, &player, block_size, &texture_manager, "C");
+                        }
                     }
                 }
 
@@ -237,7 +295,18 @@ fn main() {
                 d.draw_texture(&texture, 0, 0, Color::WHITE);
                 d.draw_texture(&mini_tex, window_width - 250, 10, Color::WHITE);
                 d.draw_text(&format!("HP: {}", player.health), 10, 10, 24, Color::RED);
-                d.draw_text(&format!("Level: {}", current_level + 1), 10, 40, 20, Color::YELLOW);
+                d.draw_text(&format!("Zona: {}", current_level + 1), 10, 40, 20, Color::YELLOW);
+
+                // Mostrar mensaje "Joker Received" si el cofre fue abierto recientemente
+                if let Some(start) = chest_message_timer {
+                    if start.elapsed().as_secs_f32() < 2.0 {
+                        let msg = "Joker recibido";
+                        let text_width = d.measure_text(msg, 40);
+                        d.draw_text(msg, (window_width - text_width) / 2, window_height / 2 - 30, 40, Color::YELLOW);
+                    } else {
+                        chest_message_timer = None;
+                    }
+                }
 
                 if damage_overlay_alpha > 0.01 {
                     let color = Color::new(255, 0, 0, (damage_overlay_alpha * 255.0) as u8);
@@ -249,8 +318,8 @@ fn main() {
                 let key_menu = rl.is_key_pressed(KeyboardKey::KEY_M);
                 let mut d = rl.begin_drawing(&thread);
                 d.clear_background(Color::BLACK);
-                d.draw_text("¡VICTORY! Has completado el juego.", 300, 300, 40, Color::WHITE);
-                d.draw_text("Press M to return to menu", 300, 360, 24, Color::LIGHTGRAY);
+                d.draw_text("Bien hecho. Pero aún te falta purificar más zonas.", 300, 300, 40, Color::WHITE);
+                d.draw_text("M para volver al menú", 300, 360, 24, Color::LIGHTGRAY);
                 if key_menu {
                     state = GameState::Menu;
                 }
@@ -261,9 +330,9 @@ fn main() {
                 let key_menu = rl.is_key_pressed(KeyboardKey::KEY_M);
                 let mut d = rl.begin_drawing(&thread);
                 d.clear_background(Color::BLACK);
-                d.draw_text("YOU DIED", 500, 300, 60, Color::RED);
-                d.draw_text("Press R to Respawn", 480, 380, 30, Color::LIGHTGRAY);
-                d.draw_text("Press M to return to Menu", 450, 420, 24, Color::LIGHTGRAY);
+                d.draw_text("Fallaste.", 500, 300, 60, Color::RED);
+                d.draw_text("R para respawnear", 480, 380, 30, Color::LIGHTGRAY);
+                d.draw_text("M para volver al menú", 450, 420, 24, Color::LIGHTGRAY);
 
                 if key_respawn {
                     let (nx, ny) = find_player_start(&maze).unwrap();

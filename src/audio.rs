@@ -42,4 +42,15 @@ impl Audio {
             sink.detach();
         }
     }
+
+        pub fn play_chest(&self) {
+        if let Ok(sink) = Sink::try_new(&self.handle) {
+            if let Ok(file) = File::open("assets/sfx_chest.wav") {
+                let src = rodio::Decoder::new(BufReader::new(file)).unwrap();
+                sink.append(src);
+            }
+            sink.set_volume(self.sfx_volume);
+            sink.detach();
+        }
+    }
 }
